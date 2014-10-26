@@ -1,0 +1,91 @@
+---
+title: "PA_Machine Learning"
+author: "Jose Pereira"
+date: "Sunday, October 26, 2014"
+output: html_document
+---
+#### Introduction
+  Using data provided by Coursera regarding the readings  from accelerometers on the belt, forearm, arm, and dumbell of 6 participants that were asked to perform barbell lifts correctly and incorrectly in 5 different ways we must predict the manner in which they did the exercise. Taht is the "classe" variable in the training set. 
+
+#### Loading the data and R PAckages
+
+```{r}
+setwd ("G:\\Otros\\Bibliografía\\Machine Learning\\Week 3")
+Training <- read.csv("pml-training.csv", row.names = 1)
+Test <- read.csv("pml-testing.csv", row.names = 1)
+library ("caret")
+library ("kernlab")
+```
+
+#### Select the Covariates
+
+  So in the week 2, covariates creation lesson we learned that we must remove "Zero Covariates", so lets do that. What i want to do is to keep the variables that have some variability, (i.e False under the nsv$nzv collumn). Using this i passed from 159 variables to 99 variables.
+
+```{r}
+Training <- Training[,nsv$nzv == FALSE]
+```
+
+  If we run a view(Training) -wont do it here because it takes too much space- we can see that there are a lot of NA's under the collumns of course an NA does not help us constructing our models, so im going to drop all the collumns with a NA in order so see how many collumns we are left with.
+
+```{r}
+Training <- Training[ , ! apply( Training , 2 , function(x) any(is.na(x)) ) ]
+dim(Training)
+
+```
+
+ Our collumns dropped from 99 to 58. Now we are going to work with this dataset and see if we can get an efficient model.
+
+#### Model Training
+
+  I'm going to test two models, K nearest neighbour and Support Vector Machines with Radial Basis Function Kernel it is worth noting that i wanted to contruct a random forest model but computational limitations were an obstacle. 
+
+```{r}
+#In order to cross validate im going to create to sets of data from the training data
+inTrain <-createDataPartition (y=Training$classe, p=0.80,list=FALSE) 
+sub_train <- Training [inTrain,] 
+sub_test <- Training [-inTrain,]
+#In order to train or data, im going to set the train control to cross validate with 5 folds
+t_control <- trainControl(method = "cv", number = 5, allowParallel = TRUE, verboseIter = TRUE)
+m1 <- train(classe ~ ., data = sub_train, method = "knn", trControl = t_control)
+m2 <- train(classe ~ ., data = sub_train, method = "svmRadial", trControl = t_control)
+
+```
+  
+  Now that i have my two models, i predict the sub_test values in order to get a grasp of model efficiency and, oos error
+
+```{r}
+subtest_predict_m1 <- predict(m1, sub_test)
+subtest_predict_m2 <- predict(m2, sub_test)
+#and then calculate oos error = 1-accuracy
+oos_m1 <-1-(sum(subtest_predict_m1 == sub_test$classe)/nrow (sub_test))
+print(oos_m1)
+oos_m2 <- 1-(sum(subtest_predict_m2 == sub_test$classe)/nrow (sub_test))
+print(oos_m2)
+
+```
+#### Modelling
+As we  saw in the previous section we have an m2 with a much lower oos error than m1. With this in mind i will use this model to predict the validation dataset provided by Coursera.
+
+```{r}
+Final.pred <- predict(m2, Test)
+print (Final.pred)
+```
+
+#### Creating .txt files for the automatic correction part
+
+
+From here i just take the Coursera provided function and predict 20/20 correct answers
+
+
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(Final.pred)
+
+```
